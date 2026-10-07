@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>노꽁 — 노원구 꽁초함 지도</title>
+<meta name="description" content="노원구 공릉동 일대 담배꽁초 수거함·흡연부스 위치와 무단투기 핫스팟 제보. 가장 가까운 꽁초함을 바로 찾으세요.">
+<meta name="theme-color" content="#1F2A33">
+
+<!-- 지도 라이브러리 (Leaflet). 배포 환경(GitHub Pages, Vercel 등)에서 정상 동작합니다. -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+
+<style>
+  :root{
+    --asphalt:#1F2A33;      /* 상단 바, 본문 글자 */
+    --filter:#E8862B;       /* 꽁초함 핀 = 담배 필터 색 */
+    --booth:#2F6FD6;        /* 흡연부스·흡연구역 핀 */
+    --hotspot:#D23B3B;      /* 무단투기 핫스팟 */
+    --paper:#FFFFFF;
+    --mist:#EEF1F3;
+    --ink:#1B1F23;
+    --muted:#5E6B75;
+    box-sizing:border-box;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  *,*::before,*::after{box-sizing:inherit}
+  html,body{height:100%;margin:0}
+  body{
+    font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+    color:var(--ink);background:var(--mist);
+    -webkit-font-smoothing:antialiased;
+    display:flex;flex-direction:column;
+  }
+
+  /* 상단 바 */
+  header{
+    background:var(--asphalt);color:#fff;
+    padding:10px 14px;display:flex;align-items:center;gap:12px;
+  }
+  header h1{font-size:20px;font-weight:800;margin:0;letter-spacing:-0.02em;line-height:1}
+  header h1 small{display:block;font-size:12px;font-weight:500;color:#B8C2CB;margin-top:4px;letter-spacing:0}
+  .stats{margin-left:auto;font-size:12px;color:#B8C2CB;text-align:right;line-height:1.35}
+  .stats b{color:#fff;font-weight:700}
+
+  /* 지도 영역 */
+  main{position:relative;flex:1;min-height:0}
+  #map{position:absolute;inset:0;background:#DDE3E8}
+
+  /* 지도 위 컨트롤 */
+  .chips{
+    position:absolute;top:10px;left:10px;right:10px;z-index:500;
+    display:flex;gap:6px;flex-wrap:wrap;
+  }
+  .chip{
+    border:0;border-radius:999px;padding:7px 12px;font:inherit;font-size:13px;font-weight:600;
+    background:var(--paper);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.18);
+    display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+  }
+  .chip .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+  .chip[aria-pressed="false"]{opacity:.5}
+  .chip:focus-visible,.btn:focus-visible{outline:3px solid #FFD166;outline-offset:2px}
+
+  .actions{
+    position:absolute;left:10px;right:10px;bottom:14px;z-index:500;
+    display:flex;gap:8px;
+  }
+  .btn{
+    flex:1;border:0;border-radius:14px;padding:14px 12px;font:inherit;font-size:16px;font-weight:700;
+    cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.22);
+  }
+  .btn-primary{background:var(--filter);color:#1B1F23}
+  .btn-secondary{background:var(--paper);color:var(--ink);flex:0 0 auto}
+  .btn[disabled]{opacity:.6;cursor:default}
+
+  /* 핀 */
+  .pin{
+    width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+    border:2px solid #fff;box-shadow:0 2px 4px rgba(0,0,0,.35);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .pin span{transform:rotate(45deg);color:#fff;font-size:12px;font-weight:800;line-height:1}
+  .pin.bin{background:var(--filter)}
+  .pin.booth{background:var(--booth)}
+  .pin.hotspot{background:var(--hotspot)}
+  .pin.demo{border-style:dashed;opacity:.75}
+  .pin.nearest{box-shadow:0 0 0 6px rgba(232,134,43,.35),0 2px 4px rgba(0,0,0,.35)}
+  .me{width:16px;height:16px;border-radius:50%;background:#2F6FD6;border:3px solid #fff;box-shadow:0 0 0 6px rgba(47,111,214,.25)}
+
+  /* 하단 시트 */
+  .sheet{
+    position:absolute;left:0;right:0;bottom:0;z-index:600;
+    background:var(--paper);border-radius:18px 18px 0 0;
+    box-shadow:0 -4px 18px rgba(0,0,0,.18);
+    padding:14px 16px calc(16px + env(safe-area-inset-bottom,0px));
+    transform:translateY(105%);transition:transform .22s ease;
+    max-height:70%;overflow:auto;
+  }
+  .sheet.open{transform:translateY(0)}
+  @media (prefers-reduced-motion:reduce){.sheet{transition:none}}
+  .sheet .handle{width:38px;height:4px;border-radius:2px;background:#C9D1D8;margin:0 auto 12px}
+  .sheet h2{font-size:18px;font-weight:800;margin:0 0 4px;letter-spacing:-0.01em}
+  .sheet .meta{color:var(--muted);font-size:13px;margin:0 0 10px}
+  .sheet .dist{font-size:40px;font-weight:800;letter-spacing:-0.03em;line-height:1;margin:6px 0 2px}
+  .sheet .dist small{font-size:14px;font-weight:600;color:var(--muted);margin-left:6px;letter-spacing:0}
+  .sheet p{margin:6px 0;font-size:14px;line-height:1.5}
+  .row{display:flex;gap:8px;margin-top:12px}
+  .row .btn{padding:12px}
+  .link{color:var(--booth);font-weight:700;text-decoration:none}
+  .tag{display:inline-block;font-size:12px;font-weight:700;padding:3px 8px;border-radius:6px;background:var(--mist);color:var(--muted)}
+  .tag.unverified{background:#FFF1E0;color:#9A5B14}
+  .close{position:absolute;top:10px;right:12px;border:0;background:none;font-size:22px;line-height:1;cursor:pointer;color:var(--muted)}
+
+  /* 제보 폼 */
+  form label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px}
+  form select,form input,form textarea{
+    width:100%;font:inherit;font-size:15px;padding:10px 12px;border:1px solid #C9D1D8;border-radius:10px;background:#fff
+  }
+  form textarea{min-height:72px;resize:vertical}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px}
+
+  /* 안내 띠 */
+  .notice{
+    background:#FFF7EE;color:#5A3A14;font-size:13px;line-height:1.5;
+    padding:8px 14px;border-top:1px solid #F3D9BC;
+  }
+  .notice a{color:inherit}
+  .toast{
+    position:absolute;left:50%;top:60px;transform:translateX(-50%);z-index:700;
+    background:var(--asphalt);color:#fff;padding:10px 14px;border-radius:10px;font-size:14px;
+    box-shadow:0 4px 12px rgba(0,0,0,.25);display:none;max-width:90%;
+  }
+  @media (min-width:720px){
+    header h1{font-size:22px}
+    .actions{left:auto;right:16px;width:360px}
+    .sheet{left:auto;right:16px;width:360px;border-radius:18px;bottom:16px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>노꽁<small>노원구엔 담배꽁초가 없다</small></h1>
+  <div class="stats" id="stats" aria-live="polite"></div>
+</header>
+
+<main>
+  <div id="map" role="application" aria-label="노원구 꽁초함 지도"></div>
+
+  <div class="chips" role="group" aria-label="표시할 항목">
+    <button class="chip" data-layer="bin" aria-pressed="true"><span class="dot" style="background:var(--filter)"></span>꽁초함</button>
+    <button class="chip" data-layer="booth" aria-pressed="true"><span class="dot" style="background:var(--booth)"></span>흡연부스·흡연구역</button>
+    <button class="chip" data-layer="hotspot" aria-pressed="true"><span class="dot" style="background:var(--hotspot)"></span>무단투기 핫스팟</button>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <div class="actions">
+    <button class="btn btn-primary" id="btnLocate">가장 가까운 꽁초함 찾기</button>
+    <button class="btn btn-secondary" id="btnReport" aria-label="제보하기">+ 제보</button>
+  </div>
+
+  <section class="sheet" id="sheet" aria-live="polite">
+    <button class="close" id="btnClose" aria-label="닫기">×</button>
+    <div class="handle"></div>
+    <div id="sheetBody"></div>
+  </section>
+</main>
+
+<div class="notice">
+  담배 필터는 플라스틱(셀룰로오스 아세테이트)입니다. 길에 버린 꽁초는 빗물받이를 거쳐 중랑천과 한강, 서해로 갑니다.
+  꽁초 무단투기 과태료는 5만 원입니다. 지도 ⓒ <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> 기여자 · 팀 이해하셨조
+</div>
+
+<script>
+/* =========================================================
+   1) 설정
+   ========================================================= */
+const SHOW_DEMO = true;      // 답사 데이터가 들어오면 false 로 바꾸세요. 예시 핀은 점선으로 표시됩니다.
+const REPORT_ENDPOINT = "";  // 제보를 서버(예: Google Apps Script 웹앱 URL)로 보내려면 여기에 URL. 비우면 브라우저에만 저장.
+const NOWON_BOUNDS = [[37.595, 127.02], [37.715, 127.14]];  // 노원구 대략 경계. 이 밖으로는 못 나갑니다.
+const START = { center: [37.6255, 127.0800], zoom: 15 };     // 공릉동
+
+/* =========================================================
+   2) 데이터
+   type: bin(꽁초함) | booth(흡연부스·흡연구역) | hotspot(무단투기 핫스팟)
+   source: 구청 발표 | 답사 | 제보
+   verified: 답사로 위치를 확인했으면 true
+   좌표는 네이버/카카오 지도에서 우클릭 → 좌표 복사로 얻습니다.
+   ========================================================= */
+const DATA = [
+  // 노원구청이 발표한 스마트 흡연부스. 역 좌표는 임시값 — 답사 후 정확한 위치로 수정하세요.
+  { id:"booth-hwarangdae", type:"booth", name:"화랑대역 흡연부스", lat:37.6200, lng:127.0845,
+    desc:"노원구청 발표 스마트 친환경 흡연부스. 정확한 출구·위치는 답사 후 기입.", source:"구청 발표", verified:false, date:"2025-05" },
+  { id:"booth-taereung", type:"booth", name:"태릉입구역 흡연부스", lat:37.6178, lng:127.0750,
+    desc:"2025년 5월 말 완공 예정으로 발표. 설치 여부와 위치 확인 필요.", source:"구청 발표", verified:false, date:"2025-05" },
+  // 아래는 화면을 확인하기 위한 예시 데이터입니다. 실제 위치가 아닙니다.
+  { id:"demo-1", type:"bin", name:"예시 꽁초함 A", lat:37.6262, lng:127.0794, desc:"예시 데이터. 실제 위치 아님.", source:"예시", verified:false, demo:true },
+  { id:"demo-2", type:"bin", name:"예시 꽁초함 B", lat:37.6239, lng:127.0732, desc:"예시 데이터. 실제 위치 아님.", source:"예시", verified:false, demo:true },
+  { id:"demo-3", type:"hotspot", name:"예시 핫스팟", lat:37.6281, lng:127.0892, desc:"예시 데이터. 실제 위치 아님.", source:"예시", verified:false, demo:true },
+];
+
+/* =========================================================
+   3) 지도
+   ========================================================= */
+const map = L.map("map", { zoomControl:false, maxBounds:NOWON_BOUNDS, maxBoundsViscosity:1, minZoom:13 })
+  .setView(START.center, START.zoom);
+L.control.zoom({ position:"topright" }).addTo(map);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom:19, attribution:"&copy; OpenStreetMap contributors"
+}).addTo(map);
+
+const layers = { bin:L.layerGroup().addTo(map), booth:L.layerGroup().addTo(map), hotspot:L.layerGroup().addTo(map) };
+const markerById = new Map();
+const LABEL = { bin:"꽁", booth:"부", hotspot:"!" };
+const TYPE_NAME = { bin:"꽁초함", booth:"흡연부스·흡연구역", hotspot:"무단투기 핫스팟" };
+
+function pinIcon(item, nearest=false){
+  const cls = ["pin", item.type, item.demo?"demo":"", nearest?"nearest":""].join(" ");
+  return L.divIcon({ className:"", html:`<div class="${cls}"><span>${LABEL[item.type]}</span></div>`, iconSize:[26,26], iconAnchor:[13,26] });
+}
+
+function addItem(item){
+  const m = L.marker([item.lat, item.lng], { icon:pinIcon(item), title:item.name });
+  m.on("click", () => showItem(item));
+  m.addTo(layers[item.type]);
+  markerById.set(item.id, { marker:m, item });
+}
+
+/* =========================================================
+   4) 제보 저장 (브라우저 localStorage). 팀이 합칠 때는 '제보 내려받기'로 JSON을 받으세요.
+   ========================================================= */
+const REPORT_KEY = "nokkong_reports_v1";
+function loadReports(){ try{ return JSON.parse(localStorage.getItem(REPORT_KEY)||"[]"); }catch(e){ return []; } }
+function saveReports(list){ try{ localStorage.setItem(REPORT_KEY, JSON.stringify(list)); }catch(e){} }
+let reports = loadReports();
+
+function allItems(){ return DATA.filter(d => SHOW_DEMO || !d.demo).concat(reports); }
+
+function render(){
+  Object.values(layers).forEach(l => l.clearLayers());
+  markerById.clear();
+  allItems().forEach(addItem);
+  const real = allItems().filter(d => !d.demo);
+  const n = t => real.filter(d => d.type===t).length;
+  document.getElementById("stats").innerHTML =
+    `꽁초함 <b>${n("bin")}</b> · 흡연부스 <b>${n("booth")}</b><br>제보 <b>${reports.length}</b>`;
+}
+render();
+
+/* =========================================================
+   5) 레이어 토글
+   ========================================================= */
+document.querySelectorAll(".chip").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const on = btn.getAttribute("aria-pressed") !== "true";
+    btn.setAttribute("aria-pressed", on);
+    const l = layers[btn.dataset.layer];
+    on ? l.addTo(map) : map.removeLayer(l);
+  });
+});
+
+/* =========================================================
+   6) 하단 시트
+   ========================================================= */
+const sheet = document.getElementById("sheet");
+const sheetBody = document.getElementById("sheetBody");
+function openSheet(html){ sheetBody.innerHTML = html; sheet.classList.add("open"); }
+function closeSheet(){ sheet.classList.remove("open"); reportMode = false; }
+document.getElementById("btnClose").addEventListener("click", closeSheet);
+
+function kakaoLink(item){ return `https://map.kakao.com/link/to/${encodeURIComponent(item.name)},${item.lat},${item.lng}`; }
+
+function showItem(item, distM){
+  const tag = item.demo ? `<span class="tag unverified">예시 데이터</span>`
+            : item.verified ? `<span class="tag">답사 확인</span>` : `<span class="tag unverified">위치 확인 필요</span>`;
+  const dist = (distM!=null) ? `<div class="dist">${fmtDist(distM)}<small>걸어서 약 ${Math.max(1,Math.round(distM/80))}분</small></div>` : "";
+  openSheet(`
+    <h2>${item.name}</h2>
+    <p class="meta">${TYPE_NAME[item.type]} · 출처: ${item.source}${item.date?" · "+item.date:""} ${tag}</p>
+    ${dist}
+    <p>${item.desc||""}</p>
+    <div class="row">
+      <a class="btn btn-primary" style="text-align:center;text-decoration:none" href="${kakaoLink(item)}" target="_blank" rel="noopener">카카오맵으로 길찾기</a>
+    </div>
+  `);
+}
+function fmtDist(m){ return m < 1000 ? `${Math.round(m)}m` : `${(m/1000).toFixed(1)}km`; }
+
+/* =========================================================
+   7) 내 위치 → 가장 가까운 꽁초함
+   ========================================================= */
+let meMarker = null, lastNearestId = null;
+function haversine(a, b){
+  const R=6371000, toRad=x=>x*Math.PI/180;
+  const dLat=toRad(b.lat-a.lat), dLng=toRad(b.lng-a.lng);
+  const s=Math.sin(dLat/2)**2 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s));
+}
+document.getElementById("btnLocate").addEventListener("click", () => {
+  const btn = document.getElementById("btnLocate");
+  if(!navigator.geolocation){ toast("이 브라우저는 위치를 지원하지 않아요."); return; }
+  btn.disabled = true; btn.textContent = "위치 확인 중…";
+  navigator.geolocation.getCurrentPosition(pos => {
+    btn.disabled = false; btn.textContent = "가장 가까운 꽁초함 찾기";
+    const me = { lat:pos.coords.latitude, lng:pos.coords.longitude };
+    if(meMarker) meMarker.remove();
+    meMarker = L.marker([me.lat, me.lng], { icon:L.divIcon({className:"", html:'<div class="me"></div>', iconSize:[16,16], iconAnchor:[8,8]}), title:"내 위치" }).addTo(map);
+    const bins = allItems().filter(d => d.type==="bin" && !d.demo);
+    if(!bins.length){ toast("등록된 꽁초함이 아직 없어요. 답사 데이터를 넣어 주세요."); map.setView([me.lat, me.lng], 16); return; }
+    let best=null, bestD=Infinity;
+    bins.forEach(b => { const d=haversine(me,b); if(d<bestD){bestD=d;best=b;} });
+    if(lastNearestId && markerById.get(lastNearestId)) markerById.get(lastNearestId).marker.setIcon(pinIcon(markerById.get(lastNearestId).item));
+    const rec = markerById.get(best.id); if(rec){ rec.marker.setIcon(pinIcon(best,true)); lastNearestId = best.id; }
+    map.fitBounds([[me.lat,me.lng],[best.lat,best.lng]], { padding:[60,60], maxZoom:17 });
+    showItem(best, bestD);
+  }, err => {
+    btn.disabled = false; btn.textContent = "가장 가까운 꽁초함 찾기";
+    toast(err.code===1 ? "위치 권한을 허용하면 가까운 꽁초함을 찾아 드려요." : "위치를 가져오지 못했어요. 다시 시도해 주세요.");
+  }, { enableHighAccuracy:true, timeout:10000 });
+});
+
+/* =========================================================
+   8) 제보: 지도를 눌러 위치 지정 → 유형·메모 → 저장
+   ========================================================= */
+let reportMode = false, pendingLatLng = null;
+document.getElementById("btnReport").addEventListener("click", () => {
+  reportMode = true;
+  openSheet(`<h2>제보</h2><p class="meta">지도에서 위치를 한 번 눌러 주세요.</p><p>꽁초함이 있는 곳, 있어야 하는데 없는 곳, 꽁초가 많이 버려진 곳을 알려 주세요.</p>`);
+});
+map.on("click", e => {
+  if(!reportMode) return;
+  pendingLatLng = e.latlng;
+  openSheet(`
+    <h2>제보</h2>
+    <p class="meta">위치 ${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}</p>
+    <form id="reportForm">
+      <label for="rType">어떤 제보인가요?</label>
+      <select id="rType" required>
+        <option value="bin">꽁초함이 여기 있어요</option>
+        <option value="hotspot">꽁초가 많이 버려져 있어요 (핫스팟)</option>
+        <option value="need">꽁초함이 필요한 곳이에요 (사각지대)</option>
+      </select>
+      <label for="rName">장소 이름</label>
+      <input id="rName" placeholder="예: 공릉역 2번 출구 앞 버스정류장" required>
+      <label for="rNote">메모 (선택)</label>
+      <textarea id="rNote" placeholder="예: 꽁초 30개 정도, 빗물받이 바로 옆"></textarea>
+      <label for="rPhoto">사진 (선택)</label>
+      <input id="rPhoto" type="file" accept="image/*" capture="environment">
+      <p class="hint">사진은 지금 버전에서는 저장되지 않아요. AI 꽁초 개수 인식은 서버를 붙인 뒤 켜집니다.</p>
+      <div class="row">
+        <button type="submit" class="btn btn-primary">제보 저장</button>
+        <button type="button" class="btn btn-secondary" id="btnCancel">취소</button>
+      </div>
+    </form>
+  `);
+  document.getElementById("btnCancel").addEventListener("click", closeSheet);
+  document.getElementById("reportForm").addEventListener("submit", ev => {
+    ev.preventDefault();
+    const t = document.getElementById("rType").value;
+    const item = {
+      id:"r-"+Date.now(), type:(t==="need"?"hotspot":t),
+      name:document.getElementById("rName").value.trim(),
+      lat:+pendingLatLng.lat.toFixed(6), lng:+pendingLatLng.lng.toFixed(6),
+      desc:(t==="need"?"[꽁초함 필요] ":"") + (document.getElementById("rNote").value.trim()),
+      source:"제보", verified:false, date:new Date().toISOString().slice(0,10)
+    };
+    reports.push(item); saveReports(reports); render();
+    if(REPORT_ENDPOINT){
+      fetch(REPORT_ENDPOINT, { method:"POST", mode:"no-cors", headers:{"Content-Type":"text/plain"}, body:JSON.stringify(item) }).catch(()=>{});
+    }
+    closeSheet(); toast("제보를 저장했어요. 고마워요.");
+  });
+});
+
+/* =========================================================
+   9) 유틸: 토스트, 제보 내려받기(콘솔에서 downloadReports() 실행)
+   ========================================================= */
+let toastTimer;
+function toast(msg){
+  const t = document.getElementById("toast"); t.textContent = msg; t.style.display = "block";
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.style.display = "none", 2600);
+}
+function downloadReports(){
+  const blob = new Blob([JSON.stringify(reports, null, 2)], { type:"application/json" });
+  const a = Object.assign(document.createElement("a"), { href:URL.createObjectURL(blob), download:"nokkong-reports.json" });
+  a.click();
+}
+window.downloadReports = downloadReports;
+</script>
+</body>
+</html>
