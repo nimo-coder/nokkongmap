@@ -10,6 +10,7 @@
 <!-- 지도 라이브러리 (Leaflet). 배포 환경(GitHub Pages, Vercel 등)에서 정상 동작합니다. -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="data/points.js"></script>  <!-- 흡연부스·꽁초함 데이터. 없으면 빈 지도 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 
 <style>
@@ -178,25 +179,21 @@
 /* =========================================================
    1) 설정
    ========================================================= */
-const SHOW_DEMO = true;      // 답사 데이터가 들어오면 false 로 바꾸세요. 예시 핀은 점선으로 표시됩니다.
+const SHOW_DEMO = false;     // true 면 예시 핀(점선)을 표시. 실제 데이터는 data/points.js
 const REPORT_ENDPOINT = "";  // 제보를 서버(예: Google Apps Script 웹앱 URL)로 보내려면 여기에 URL. 비우면 브라우저에만 저장.
 const NOWON_BOUNDS = [[37.595, 127.02], [37.715, 127.14]];  // 노원구 대략 경계. 이 밖으로는 못 나갑니다.
 const START = { center: [37.6255, 127.0800], zoom: 15 };     // 공릉동
 
 /* =========================================================
    2) 데이터
-   type: bin(꽁초함) | booth(흡연부스·흡연구역) | hotspot(무단투기 핫스팟)
-   source: 구청 발표 | 답사 | 제보
-   verified: 답사로 위치를 확인했으면 true
-   좌표는 네이버/카카오 지도에서 우클릭 → 좌표 복사로 얻습니다.
+   실제 데이터는 data/points.js 의 DATA 배열에 있습니다 (스프레드시트에서 변환).
+   필드: id, type(bin|booth|hotspot), name, lat, lng, desc, source, verified, date,
+         address, gu, inScope(노원구 여부), boothType, indoor, areaM2, accuracy, note
+   꽁초함을 추가할 때는 type:"bin" 으로 같은 형식의 객체를 points.js 에 넣으면 됩니다.
    ========================================================= */
-const DATA = [
-  // 노원구청이 발표한 스마트 흡연부스. 역 좌표는 임시값 — 답사 후 정확한 위치로 수정하세요.
-  { id:"booth-hwarangdae", type:"booth", name:"화랑대역 흡연부스", lat:37.6200, lng:127.0845,
-    desc:"노원구청 발표 스마트 친환경 흡연부스. 정확한 출구·위치는 답사 후 기입.", source:"구청 발표", verified:false, date:"2025-05" },
-  { id:"booth-taereung", type:"booth", name:"태릉입구역 흡연부스", lat:37.6178, lng:127.0750,
-    desc:"2025년 5월 말 완공 예정으로 발표. 설치 여부와 위치 확인 필요.", source:"구청 발표", verified:false, date:"2025-05" },
-  // 아래는 화면을 확인하기 위한 예시 데이터입니다. 실제 위치가 아닙니다.
+const POINTS = (typeof DATA !== "undefined" ? DATA : []).filter(d => d.inScope !== false);
+// 화면 확인용 예시 핀. SHOW_DEMO = true 로 바꾸면 점선 핀으로 표시됩니다. 실제 위치가 아닙니다.
+const DEMO = [
   { id:"demo-1", type:"bin", name:"예시 꽁초함 A", lat:37.6262, lng:127.0794, desc:"예시 데이터. 실제 위치 아님.", source:"예시", verified:false, demo:true },
   { id:"demo-2", type:"bin", name:"예시 꽁초함 B", lat:37.6239, lng:127.0732, desc:"예시 데이터. 실제 위치 아님.", source:"예시", verified:false, demo:true },
   { id:"demo-3", type:"hotspot", name:"예시 핫스팟", lat:37.6281, lng:127.0892, desc:"예시 데이터. 실제 위치 아님.", source:"예시", verified:false, demo:true },
@@ -237,7 +234,7 @@ function loadReports(){ try{ return JSON.parse(localStorage.getItem(REPORT_KEY)|
 function saveReports(list){ try{ localStorage.setItem(REPORT_KEY, JSON.stringify(list)); }catch(e){} }
 let reports = loadReports();
 
-function allItems(){ return DATA.filter(d => SHOW_DEMO || !d.demo).concat(reports); }
+function allItems(){ return POINTS.concat(SHOW_DEMO ? DEMO : []).concat(reports); }
 
 function render(){
   Object.values(layers).forEach(l => l.clearLayers());
@@ -279,7 +276,7 @@ function showItem(item, distM){
   const dist = (distM!=null) ? `<div class="dist">${fmtDist(distM)}<small>걸어서 약 ${Math.max(1,Math.round(distM/80))}분</small></div>` : "";
   openSheet(`
     <h2>${item.name}</h2>
-    <p class="meta">${TYPE_NAME[item.type]} · 출처: ${item.source}${item.date?" · "+item.date:""} ${tag}</p>
+    <p class="meta">${item.kind || TYPE_NAME[item.type]} · 출처: ${item.source}${item.date?" · "+item.date:""} ${tag}</p>
     ${dist}
     <p>${item.desc||""}</p>
     <div class="row">
