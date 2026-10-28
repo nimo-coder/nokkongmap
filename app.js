@@ -1,5 +1,5 @@
 /* =====================================================================
-   노꽁 지도 app.js  v2.1 (2026-10-28)
+   노꽁 지도 app.js  v2.2 (2026-10-28)
    중간점검 피드백 반영: 팝업 노출 정보 최소화·입력값 소독, 네이버 지도 API 전환(OSM 자동 대체),
    제보 사진 기기 내 축소·EXIF 제거, 제보 횟수 제한, AI 추론은 서버(Apps Script)에서만 호출.
    ===================================================================== */
@@ -113,17 +113,30 @@ function loadCss(href) {
 function createNaverMap(el) {
   const N = window.naver.maps;
   const ll = (lat, lng) => new N.LatLng(lat, lng);
-  const map = new N.Map(el, {
+  const nmap = new N.Map(el, {
     center: ll(CONFIG.START.lat, CONFIG.START.lng), zoom: CONFIG.START.zoom, minZoom: CONFIG.MIN_ZOOM,
     maxBounds: new N.LatLngBounds(ll(...CONFIG.BOUNDS.sw), ll(...CONFIG.BOUNDS.ne)),
     zoomControl: true, zoomControlOptions: { position: N.Position.TOP_RIGHT },
     mapDataControl: false, scaleControl: false,
   });
   const icon = (html, w, h, ax, ay) => ({ content: html, size: new N.Size(w, h), anchor: new N.Point(ax, ay) });
+
+  // 감시: 12초 안에 타일이 하나도 그려지지 않으면(인증 지연·네트워크·렌더링 문제) OSM으로 교체합니다.
+  let tilesOk = false;
+  ["tilesloaded", "init"].forEach(ev => { try { N.Event.addListener(nmap, ev, () => { tilesOk = true; }); } catch (e) {} });
+  setTimeout(() => {
+    const imgs = Array.from(el.querySelectorAll("img"));
+    const loaded = imgs.filter(i => i.complete && i.naturalWidth > 0).length;
+    console.info("[노꽁] 네이버 지도 상태 — 타일 이미지 " + imgs.length + "개 중 " + loaded + "개 로드, 이벤트 " + (tilesOk ? "수신" : "없음"));
+    if (!tilesOk && loaded === 0 && map && map.provider === "naver") {
+      switchToLeaflet("네이버 지도가 12초 안에 그려지지 않아 OpenStreetMap으로 표시합니다. F12 콘솔의 [노꽁] 메시지를 확인하세요.");
+    }
+  }, 12000);
+
   return {
     provider: "naver",
     addMarker({ lat, lng, html, w = 26, hh = 26, ax = 13, ay = 26, title, onClick }) {
-      const m = new N.Marker({ position: ll(lat, lng), map, title: title || "", icon: icon(html, w, hh, ax, ay) });
+      const m = new N.Marker({ position: ll(lat, lng), map: nmap, title: title || "", icon: icon(html, w, hh, ax, ay) });
       if (onClick) N.Event.addListener(m, "click", onClick);
       return {
         setVisible: v => m.setVisible(!!v),
@@ -132,13 +145,13 @@ function createNaverMap(el) {
         remove: () => m.setMap(null),
       };
     },
-    onClick(cb) { N.Event.addListener(map, "click", e => cb(e.coord.lat(), e.coord.lng())); },
+    onClick(cb) { N.Event.addListener(nmap, "click", e => cb(e.coord.lat(), e.coord.lng())); },
     fitTwo(a, b) {
-      map.fitBounds(new N.LatLngBounds(ll(Math.min(a.lat, b.lat), Math.min(a.lng, b.lng)), ll(Math.max(a.lat, b.lat), Math.max(a.lng, b.lng))),
+      nmap.fitBounds(new N.LatLngBounds(ll(Math.min(a.lat, b.lat), Math.min(a.lng, b.lng)), ll(Math.max(a.lat, b.lat), Math.max(a.lng, b.lng))),
         { top: 70, right: 50, bottom: 120, left: 50 });
-      if (map.getZoom() > CONFIG.MAX_FIT_ZOOM) map.setZoom(CONFIG.MAX_FIT_ZOOM);
+      if (nmap.getZoom() > CONFIG.MAX_FIT_ZOOM) nmap.setZoom(CONFIG.MAX_FIT_ZOOM);
     },
-    setView(lat, lng, zoom) { map.morph(ll(lat, lng), zoom); },
+    setView(lat, lng, zoom) { nmap.morph(ll(lat, lng), zoom); },
   };
 }
 
