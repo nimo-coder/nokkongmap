@@ -11,7 +11,7 @@
 const CONFIG = {
   // 네이버 클라우드 플랫폼 > Maps > Application 에서 발급한 Client ID (ncpKeyId).
   // 비워 두면 OpenStreetMap(Leaflet)으로 자동 대체됩니다. 키는 등록한 웹 서비스 URL에서만 동작하므로 공개돼도 됩니다.
-  NAVER_KEY_ID: "",
+  NAVER_KEY_ID: "wces4uwwx1",
 
   // 제보 수신 서버(server/Code.gs 를 Apps Script 웹앱으로 배포한 URL). 비우면 브라우저에만 저장.
   REPORT_ENDPOINT: "",
