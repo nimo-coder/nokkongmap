@@ -1,5 +1,5 @@
 /* =====================================================================
-   노꽁 지도 app.js  v2 (2026-10-28)
+   노꽁 지도 app.js  v2.1 (2026-10-28)
    중간점검 피드백 반영: 팝업 노출 정보 최소화·입력값 소독, 네이버 지도 API 전환(OSM 자동 대체),
    제보 사진 기기 내 축소·EXIF 제거, 제보 횟수 제한, AI 추론은 서버(Apps Script)에서만 호출.
    ===================================================================== */
@@ -175,8 +175,13 @@ async function createMap(el) {
     return createLeafletMap(el);
   }
   // 인증 실패(키·도메인 미등록) 시 네이버 SDK가 호출하는 전역 함수. 스크립트 로드 전에 정의해야 합니다.
+  // 인증은 SDK 로드 뒤 비동기로 진행되므로, 지도가 이미 만들어진 뒤에 실패가 올 수도 있습니다 → 그때는 OSM으로 교체.
   const naverOk = new Promise((res, rej) => {
-    window.navermap_authFailure = () => rej(new Error("naver auth failed"));
+    window.navermap_authFailure = () => {
+      console.error("[노꽁] 네이버 지도 인증 실패. NCP 콘솔 > Maps > Application > 인증 정보의 'Web 서비스 URL'에 " + location.origin + " 이(가) 등록돼 있는지, Client ID가 Maps 상품(ncpKeyId)용인지 확인하세요.");
+      if (map) switchToLeaflet("네이버 지도 인증에 실패해 OpenStreetMap으로 표시합니다. NCP 콘솔의 웹 서비스 URL(" + location.origin + ") 등록을 확인하세요.");
+      else rej(new Error("naver auth failed"));
+    };
     loadScript("https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=" + encodeURIComponent(CONFIG.NAVER_KEY_ID)).then(() => {
       let tries = 0;
       (function wait() {
@@ -197,6 +202,28 @@ async function createMap(el) {
     el.innerHTML = "";
     return createLeafletMap(el);
   }
+}
+
+// 네이버 지도를 이미 띄운 뒤 인증 실패·오류가 나면 같은 자리에 OSM 지도를 다시 그립니다.
+let switching = false;
+async function switchToLeaflet(reason) {
+  if (switching || (map && map.provider === "leaflet")) return;
+  switching = true;
+  console.warn("[노꽁] " + reason);
+  mapNote(reason, 15000);
+  for (const rec of markers.values()) { try { rec.handle.remove(); } catch (e) { /* 죽은 지도 객체 */ } }
+  markers.clear();
+  if (meMarker) { try { meMarker.remove(); } catch (e) {} meMarker = null; }
+  if (pickMarker) { try { pickMarker.remove(); } catch (e) {} pickMarker = null; }
+  const el = $("map");
+  el.innerHTML = ""; el.removeAttribute("style"); el.className = "";   // 네이버 SDK가 남긴 인라인 스타일·클래스 제거
+  try {
+    map = await createLeafletMap(el);
+    map.onClick(onMapClick);
+    render();
+  } catch (e) {
+    console.error(e); mapNote("지도를 불러오지 못했어요. 새로고침해 주세요.");
+  } finally { switching = false; }
 }
 
 /* =========================================================
