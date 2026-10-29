@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>노꽁 — 네이버 지도 진단 2 (레이아웃)</title>
+<style>
+  /* index.html 과 같은 전역 규칙 */
+  :root{box-sizing:border-box}
+  *,*::before,*::after{box-sizing:inherit}
+  body{font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;margin:0;background:#fff;color:#1B1F23}
+  h1{font-size:18px;margin:0;padding:12px 16px;background:#1F2A33;color:#fff}
+  h2{font-size:15px;margin:14px 16px 6px}
+  .box{margin:0 16px;border:2px dashed #C9D1D8}
+  /* A: 단순 블록 (어제 test-naver.html 과 같음) */
+  #mA{height:220px;background:#DDE3E8}
+  /* B: index.html 과 똑같은 구조 — flex 세로 배치 안의 main, 그 안에 position:absolute 로 채운 #map */
+  .pageB{display:flex;flex-direction:column;height:300px}
+  .pageB header{height:44px;background:#1F2A33;color:#fff;padding:12px;font-size:13px}
+  .pageB main{position:relative;flex:1;min-height:0}
+  #mB{position:absolute;inset:0;background:#DDE3E8}
+  /* C: 고칠 안 — main 을 flex 로, #map 은 flex 자식 (position/height 지정 없음) */
+  .pageC{display:flex;flex-direction:column;height:300px}
+  .pageC header{height:44px;background:#1F2A33;color:#fff;padding:12px;font-size:13px}
+  .pageC main{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
+  #mC{flex:1 1 auto;min-height:0;width:100%;background:#DDE3E8}
+  #sum{margin:14px 16px 8px;padding:12px 14px;border-radius:10px;background:#FFF1E0;font-size:16px;font-weight:700;line-height:1.5;white-space:pre-wrap}
+  .ok{color:#1E6B3A}.bad{color:#B3261E}
+  #out{margin:0;padding:12px 16px;font:13px/1.6 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all}
+  .bar{padding:8px 16px 24px}
+  button{font:inherit;padding:6px 12px;border-radius:8px;border:1px solid #C9D1D8;background:#fff;cursor:pointer}
+</style>
+</head>
+<body>
+<h1>노꽁 네이버 지도 진단 2 — 지도 영역 레이아웃 비교</h1>
+
+<h2>A. 단순 블록 (어제 성공한 방식)</h2>
+<div class="box"><div id="mA"></div></div>
+
+<h2>B. index.html 과 같은 구조 (position:absolute 로 채운 #map)</h2>
+<div class="box pageB"><header>헤더 흉내</header><main><div id="mB"></div></main></div>
+
+<h2>C. 고칠 안 (flex 자식으로 채운 #map)</h2>
+<div class="box pageC"><header>헤더 흉내</header><main><div id="mC"></div></main></div>
+
+<div id="sum">진단 중… 12초만 기다리세요.</div>
+<pre id="out"></pre>
+<div class="bar"><button id="copy">결과 복사</button></div>
+
+<script>
+(function () {
+  var KEY = "wces4uwwx1";
+  var SDK = "https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=" + KEY;
+  var out = document.getElementById("out"), sum = document.getElementById("sum");
+  var t0 = Date.now(), lines = [];
+  function log(s) { lines.push("+" + String(Date.now() - t0).padStart(5) + "ms  " + s); out.textContent = lines.join("\n"); }
+  ["error", "warn"].forEach(function (k) {
+    var orig = console[k];
+    console[k] = function () { log("console." + k + " → " + Array.prototype.join.call(arguments, " ")); try { orig.apply(console, arguments); } catch (e) {} };
+  });
+  window.addEventListener("error", function (e) { log("JS 오류 → " + e.message); });
+  window.navermap_authFailure = function () { log("★ navermap_authFailure 호출됨 (인증 실패)"); };
+
+  var R = {};   // 컨테이너별 결과
+  function size(el) { return el.clientWidth + "×" + el.clientHeight + "px"; }
+  function probe(id) {
+    var el = document.getElementById(id), N = window.naver.maps;
+    var before = size(el);
+    var r = R[id] = { before: before, tiles: 0, loaded: 0, tilesloaded: false };
+    try {
+      var map = new N.Map(el, { center: new N.LatLng(37.6255, 127.08), zoom: 15, zoomControl: true });
+      N.Event.addListener(map, "tilesloaded", function () { r.tilesloaded = true; });
+      r.map = map;
+    } catch (e) { r.error = e.message; }
+    r.after = size(el);
+    r.inline = el.getAttribute("style") || "(없음)";
+    r.position = getComputedStyle(el).position;
+    log(id + ": 생성 전 " + before + " → 생성 후 " + r.after + " · computed position=" + r.position + " · SDK 가 쓴 inline style: " + r.inline);
+  }
+
+  var s = document.createElement("script"); s.src = SDK; s.async = true;
+  s.onerror = function () { log("★ SDK 다운로드 실패"); sum.textContent = "SDK 를 못 받았어요. 네트워크 확인."; sum.className = "bad"; };
+  s.onload = function () {
+    var tries = 0;
+    (function wait() {
+      if (window.naver && window.naver.maps && window.naver.maps.Map) { log("SDK 준비됨"); ["mA", "mB", "mC"].forEach(probe); setTimeout(finish, 10000); return; }
+      if (++tries > 40) { log("★ naver.maps.Map 없음"); return; }
+      setTimeout(wait, 200);
+    })();
+  };
+  document.head.appendChild(s);
+  log("페이지 주소: " + location.href);
+  log("SDK 요청 시작: " + SDK);
+
+  function finish() {
+    var lines2 = [];
+    ["mA", "mB", "mC"].forEach(function (id) {
+      var el = document.getElementById(id), r = R[id] || {};
+      var imgs = Array.prototype.slice.call(el.querySelectorAll("img"));
+      r.tiles = imgs.length; r.loaded = imgs.filter(function (i) { return i.complete && i.naturalWidth > 0; }).length;
+      r.finalSize = size(el);
+      log(id + ": 10초 뒤 크기 " + r.finalSize + " · 타일 이미지 " + r.tiles + "개(로드 " + r.loaded + ") · tilesloaded " + (r.tilesloaded ? "수신" : "없음") + (r.error ? " · 오류 " + r.error : ""));
+      var h = parseInt(r.finalSize.split("×")[1], 10);
+      lines2.push(id.slice(1) + ": " + (h > 50 && r.loaded > 0 ? "그려짐 ✅" : (h <= 50 ? "높이 " + h + "px 로 찌그러짐 ❌" : "타일 없음 ❌")));
+    });
+    var b = R.mB || {}, c = R.mC || {};
+    var hB = parseInt((b.finalSize || "0×0").split("×")[1], 10), hC = parseInt((c.finalSize || "0×0").split("×")[1], 10);
+    var verdict;
+    if (hB <= 50 && hC > 50 && c.loaded > 0) verdict = "결론: index.html 구조(B)에서는 지도 영역 높이가 " + hB + "px 로 찌그러지고, 고칠 안(C)은 정상. → index.html 의 CSS 를 C 방식으로 바꾸면 해결.";
+    else if (hB > 50 && b.loaded > 0) verdict = "결론: index.html 구조(B)도 정상으로 그려짐. 레이아웃 문제는 아님 → app.js 옵션 쪽을 봐야 함. 이 화면 그대로 보내 주기.";
+    else verdict = "결론: 예상 밖의 결과. 이 화면 그대로 보내 주기.";
+    sum.textContent = lines2.join("   ") + "\n" + verdict;
+    sum.className = (hC > 50 && c.loaded > 0) ? "ok" : "bad";
+    log("=== 진단 끝 ===");
+  }
+
+  document.getElementById("copy").onclick = function () {
+    var txt = sum.textContent + "\n\n" + lines.join("\n"), btn = document.getElementById("copy");
+    function sel() { var r = document.createRange(); r.selectNodeContents(out); var s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = "선택됨 — Ctrl+C 로 복사"; }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function () { btn.textContent = "복사됨 — 채팅에 붙여넣기"; }, sel); else sel();
+  };
+})();
+</script>
+</body>
+</html>
