@@ -1,5 +1,5 @@
 /* =====================================================================
-   노꽁 지도 app.js  v2.2 (2026-10-28)
+   노꽁 지도 app.js  v2.3 (2026-10-28)
    중간점검 피드백 반영: 팝업 노출 정보 최소화·입력값 소독, 네이버 지도 API 전환(OSM 자동 대체),
    제보 사진 기기 내 축소·EXIF 제거, 제보 횟수 제한, AI 추론은 서버(Apps Script)에서만 호출.
    ===================================================================== */
@@ -12,6 +12,9 @@ const CONFIG = {
   // 네이버 클라우드 플랫폼 > Maps > Application 에서 발급한 Client ID (ncpKeyId).
   // 비워 두면 OpenStreetMap(Leaflet)으로 자동 대체됩니다. 키는 등록한 웹 서비스 URL에서만 동작하므로 공개돼도 됩니다.
   NAVER_KEY_ID: "wces4uwwx1",
+  // 키 파라미터 이름. 새 'Maps' 상품(Application Services > Maps)에서 발급한 키는 "ncpKeyId",
+  // 옛 'AI·NAVER API' 메뉴에서 발급한 키는 "ncpClientId". 인증 실패가 계속되면 이 값을 바꿔 보세요.
+  NAVER_KEY_PARAM: "ncpKeyId",
 
   // 제보 수신 서버(server/Code.gs 를 Apps Script 웹앱으로 배포한 URL). 비우면 브라우저에만 저장.
   REPORT_ENDPOINT: "",
@@ -123,7 +126,7 @@ function createNaverMap(el) {
 
   // 감시: 12초 안에 타일이 하나도 그려지지 않으면(인증 지연·네트워크·렌더링 문제) OSM으로 교체합니다.
   let tilesOk = false;
-  ["tilesloaded", "init"].forEach(ev => { try { N.Event.addListener(nmap, ev, () => { tilesOk = true; }); } catch (e) {} });
+  try { N.Event.addListener(nmap, "tilesloaded", () => { tilesOk = true; }); } catch (e) {}   // 'init'은 인증 전에도 발생하므로 세지 않음
   setTimeout(() => {
     const imgs = Array.from(el.querySelectorAll("img"));
     const loaded = imgs.filter(i => i.complete && i.naturalWidth > 0).length;
@@ -191,11 +194,11 @@ async function createMap(el) {
   // 인증은 SDK 로드 뒤 비동기로 진행되므로, 지도가 이미 만들어진 뒤에 실패가 올 수도 있습니다 → 그때는 OSM으로 교체.
   const naverOk = new Promise((res, rej) => {
     window.navermap_authFailure = () => {
-      console.error("[노꽁] 네이버 지도 인증 실패. NCP 콘솔 > Maps > Application > 인증 정보의 'Web 서비스 URL'에 " + location.origin + " 이(가) 등록돼 있는지, Client ID가 Maps 상품(ncpKeyId)용인지 확인하세요.");
+      console.error("[노꽁] 네이버 지도 인증 실패(401). 바로 위 네이버 SDK 메시지의 'URI:'가 NCP 콘솔 > Maps > Application > 인증 정보의 'Web 서비스 URL'(" + location.origin + ")과 같은 도메인인지, Client ID가 " + (CONFIG.NAVER_KEY_PARAM || "ncpKeyId") + "용 키인지 확인하세요.");
       if (map) switchToLeaflet("네이버 지도 인증에 실패해 OpenStreetMap으로 표시합니다. NCP 콘솔의 웹 서비스 URL(" + location.origin + ") 등록을 확인하세요.");
       else rej(new Error("naver auth failed"));
     };
-    loadScript("https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=" + encodeURIComponent(CONFIG.NAVER_KEY_ID)).then(() => {
+    loadScript("https://oapi.map.naver.com/openapi/v3/maps.js?" + (CONFIG.NAVER_KEY_PARAM || "ncpKeyId") + "=" + encodeURIComponent(CONFIG.NAVER_KEY_ID)).then(() => {
       let tries = 0;
       (function wait() {
         if (window.naver && window.naver.maps && window.naver.maps.Map) return res();
