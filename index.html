@@ -41,8 +41,10 @@
   .stats b{color:#fff;font-weight:700}
 
   /* 지도 영역 */
-  main{position:relative;flex:1;min-height:0}
-  #map{position:absolute;inset:0;background:#DDE3E8}
+  /* 네이버 지도 SDK 는 컨테이너에 position:relative 를 inline 으로 써 넣으므로 #map 을 position:absolute 로 채우면
+     높이가 0 이 됨(회색 화면). flex 자식으로 채워서 position·height 에 의존하지 않게 함 (2026-10-29) */
+  main{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}   /* overflow:hidden — 닫힌 하단 시트가 안내 띠 위로 삐져나오지 않게 */
+  #map{flex:1 1 auto;min-height:0;width:100%;background:#DDE3E8}
 
   /* 지도 위 컨트롤 */
   .chips{position:absolute;top:10px;left:10px;right:60px;z-index:500;display:flex;gap:6px;flex-wrap:wrap}
@@ -179,6 +181,6 @@
 <script src="data/points.js?v=3"></script>
 <script src="data/hotspots.js?v=1"></script>
 <!-- 앱 (지도 공급자 선택·제보·AI 호출). 설정값은 app.js 맨 위 CONFIG -->
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>
