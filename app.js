@@ -1,5 +1,5 @@
 /* =====================================================================
-   노꽁 지도 app.js  v2.3 (2026-10-28)
+   노꽁 지도 app.js  v2.4 (2026-10-29)
    중간점검 피드백 반영: 팝업 노출 정보 최소화·입력값 소독, 네이버 지도 API 전환(OSM 자동 대체),
    제보 사진 기기 내 축소·EXIF 제거, 제보 횟수 제한, AI 추론은 서버(Apps Script)에서만 호출.
    ===================================================================== */
@@ -123,6 +123,15 @@ function createNaverMap(el) {
     mapDataControl: false, scaleControl: false,
   });
   const icon = (html, w, h, ax, ay) => ({ content: html, size: new N.Size(w, h), anchor: new N.Point(ax, ay) });
+
+  // 보정: SDK 가 컨테이너에 position:relative 를 inline 으로 써서 높이가 0 이 되는 레이아웃(절대위치 #map)이면
+  // 부모를 꽉 채우도록 고치고 지도 크기를 다시 계산합니다. index.html 의 #map 이 flex 자식이면 발생하지 않습니다.
+  requestAnimationFrame(() => {
+    if (el.clientHeight >= 50) return;
+    el.style.width = "100%"; el.style.height = "100%";
+    try { nmap.setSize(new N.Size(el.clientWidth, el.clientHeight)); } catch (e) {}
+    console.warn("[노꽁] 지도 영역 높이가 0 이라 보정했습니다 (" + el.clientWidth + "×" + el.clientHeight + "px). index.html 의 #map CSS 를 확인하세요. inline style: " + el.getAttribute("style"));
+  });
 
   // 감시: 12초 안에 타일이 하나도 그려지지 않으면(인증 지연·네트워크·렌더링 문제) OSM으로 교체합니다.
   let tilesOk = false;
