@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>노꽁 — CSP 2단계 점검</title>
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<!-- index.html 과 글자 하나 다르지 않은 CSP. 이 페이지에서 '위반 0건 + 두 지도 정상'이면 index.html 을 바꿔도 안전합니다. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://oapi.map.naver.com https://*.pstatic.net https://*.naver.com https://unpkg.com https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://unpkg.com https://*.pstatic.net https://*.naver.com; img-src 'self' data: blob: https://*.pstatic.net https://*.naver.com https://*.ntruss.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://unpkg.com; font-src 'self' data: https://*.pstatic.net; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://oapi.map.naver.com https://*.naver.com https://*.pstatic.net https://*.ntruss.com https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+<style>
+  body{font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;margin:0;color:#1B1F23}
+  h1{font-size:18px;margin:0;padding:12px 16px;background:#1F2A33;color:#fff}
+  h2{font-size:15px;margin:14px 16px 6px}
+  .m{height:240px;margin:0 16px;background:#DDE3E8;border:2px dashed #C9D1D8}
+  #sum{margin:14px 16px 8px;padding:12px 14px;border-radius:10px;background:#FFF1E0;font-size:16px;font-weight:700;line-height:1.5;white-space:pre-wrap}
+  .ok{color:#1E6B3A}.bad{color:#B3261E}
+  #out{margin:0;padding:12px 16px;font:13px/1.6 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all}
+  .bar{padding:8px 16px 24px}
+  button{font:inherit;padding:6px 12px;border-radius:8px;border:1px solid #C9D1D8;background:#fff;cursor:pointer}
+</style>
+</head>
+<body>
+<h1>노꽁 CSP 2단계 점검 (test-csp.html)</h1>
+<h2>A. 네이버 지도 (CSP 적용 상태)</h2>
+<div class="m" id="mA"></div>
+<h2>B. OpenStreetMap 대체 지도 (unpkg + SRI, CSP 적용 상태)</h2>
+<div class="m" id="mB"></div>
+<div id="sum">점검 중… 12초만 기다리세요.</div>
+<pre id="out"></pre>
+<div class="bar"><button id="copy">결과 복사</button></div>
+<script src="test-csp.js"></script>
+</body>
+</html>
