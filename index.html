@@ -4,11 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>노꽁 — 노원구 꽁초함 지도</title>
-<meta name="description" content="노원구 공릉동 일대 담배꽁초 수거함·흡연부스 위치와 무단투기 핫스팟 제보. 가장 가까운 꽁초함을 바로 찾으세요.">
+<meta name="description" content="노원구 담배꽁초 수거함(구청 운영 26곳)·흡연부스 위치, 가장 가까운 꽁초함 찾기와 네이버 지도 길찾기, 무단투기 현장 사진 제보.">
 <meta name="theme-color" content="#1F2A33">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<!-- 보안 1단계: 지도 동작에 영향 없는 최소 정책. 2단계(스크립트 출처 제한)는 docs/feedback-2026-10.md 참고 -->
-<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'">
+<!-- 보안 2단계 CSP: 스크립트는 이 사이트·네이버 지도·Leaflet(unpkg, SRI)·Turnstile 만 실행. 인라인 스크립트 금지.
+     지도가 안 나오면 F12 콘솔의 "[노꽁] CSP 차단" 줄에 적힌 도메인을 해당 지시어에 추가하세요. 적용 전 test-csp.html 로 확인. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://oapi.map.naver.com https://*.pstatic.net https://*.naver.com https://unpkg.com https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://unpkg.com https://*.pstatic.net https://*.naver.com; img-src 'self' data: blob: https://*.pstatic.net https://*.naver.com https://*.ntruss.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://unpkg.com; font-src 'self' data: https://*.pstatic.net; connect-src 'self' https://script.google.com https://script.googleusercontent.com https://oapi.map.naver.com https://*.naver.com https://*.pstatic.net https://*.ntruss.com https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
 <style>
   :root{
     --asphalt:#1F2A33;      /* 상단 바 */
@@ -40,10 +41,8 @@
   .stats{margin-left:auto;font-size:12px;color:#B8C2CB;text-align:right;line-height:1.35}
   .stats b{color:#fff;font-weight:700}
 
-  /* 지도 영역 */
-  /* 네이버 지도 SDK 는 컨테이너에 position:relative 를 inline 으로 써 넣으므로 #map 을 position:absolute 로 채우면
-     높이가 0 이 됨(회색 화면). flex 자식으로 채워서 position·height 에 의존하지 않게 함 (2026-10-29) */
-  main{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}   /* overflow:hidden — 닫힌 하단 시트가 안내 띠 위로 삐져나오지 않게 */
+  /* 지도 영역: 네이버 SDK 가 컨테이너에 position:relative 를 inline 으로 쓰므로 #map 은 flex 자식으로 채움(절대위치 금지) */
+  main{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
   #map{flex:1 1 auto;min-height:0;width:100%;background:#DDE3E8}
 
   /* 지도 위 컨트롤 */
@@ -54,6 +53,7 @@
     display:inline-flex;align-items:center;gap:6px;cursor:pointer;
   }
   .chip .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+  .dot-bin{background:var(--filter)} .dot-booth{background:var(--booth)} .dot-hotspot{background:var(--hotspot)} .dot-mine{background:var(--mine)}
   .chip[aria-pressed="false"]{opacity:.5}
   .chip[hidden]{display:none}
   .chip:focus-visible,.btn:focus-visible{outline:3px solid #FFD166;outline-offset:2px}
@@ -65,6 +65,8 @@
   }
   .btn-primary{background:var(--filter);color:#1B1F23}
   .btn-secondary{background:var(--paper);color:var(--ink);flex:0 0 auto}
+  .btn-report{background:var(--hotspot);color:#fff;flex:0 0 auto}
+  .btn.small{padding:10px 12px;font-size:14px;box-shadow:none;border:1px solid #C9D1D8;flex:1}
   .btn[disabled]{opacity:.6;cursor:default}
 
   /* 핀 (지도 라이브러리와 무관한 HTML 아이콘) */
@@ -90,36 +92,39 @@
     box-shadow:0 -4px 18px rgba(0,0,0,.18);
     padding:14px 16px calc(16px + env(safe-area-inset-bottom,0px));
     transform:translateY(105%);transition:transform .22s ease;
-    max-height:72%;overflow:auto;
+    max-height:78%;overflow:auto;
   }
   .sheet.open{transform:translateY(0)}
   @media (prefers-reduced-motion:reduce){.sheet{transition:none}}
   .sheet .handle{width:38px;height:4px;border-radius:2px;background:#C9D1D8;margin:0 auto 12px}
   .sheet h2{font-size:18px;font-weight:800;margin:0 0 4px;letter-spacing:-0.01em;padding-right:28px}
-  .sheet .meta{color:var(--muted);font-size:13px;margin:0 0 10px}
+  .sheet .meta{color:var(--muted);font-size:13px;margin:0 0 10px;line-height:1.5}
   .sheet .dist{font-size:40px;font-weight:800;letter-spacing:-0.03em;line-height:1;margin:6px 0 2px}
   .sheet .dist small{font-size:14px;font-weight:600;color:var(--muted);margin-left:6px;letter-spacing:0}
   .sheet p{margin:6px 0;font-size:14px;line-height:1.5}
   .row{display:flex;gap:8px;margin-top:12px}
+  .row.tight{margin-top:0}
   .row .btn{padding:12px}
-  .tag{display:inline-block;font-size:12px;font-weight:700;padding:3px 8px;border-radius:6px;background:var(--mist);color:var(--muted);margin-left:4px}
+  .tag{display:inline-block;font-size:12px;font-weight:700;padding:3px 8px;border-radius:6px;background:var(--mist);color:var(--muted);margin-left:4px;margin-top:2px}
   .tag.warn{background:#FFF1E0;color:#9A5B14}
   .tag.ok{background:#E6F4EA;color:#1E6B3A}
   .close{position:absolute;top:10px;right:12px;border:0;background:none;font-size:22px;line-height:1;cursor:pointer;color:var(--muted)}
 
   /* 제보 폼 */
   form label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px}
-  form select,form input[type=text],form textarea{
+  form input[type=text],form textarea{
     width:100%;font:inherit;font-size:15px;padding:10px 12px;border:1px solid #C9D1D8;border-radius:10px;background:#fff
   }
-  form textarea{min-height:72px;resize:vertical}
-  form input[type=file]{font-size:14px}
+  form input[type=file]{font-size:14px;max-width:100%}
   .consent{display:flex;gap:8px;align-items:flex-start;font-size:13px;font-weight:500;margin-top:12px;line-height:1.45}
   .consent input{margin-top:3px}
   .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
   .hint{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.45}
+  .hint.ok{color:#1E6B3A} .hint.bad{color:#B3261E;font-weight:700}
+  .hint.link{text-decoration:underline;cursor:pointer;margin-top:14px;text-align:center}
   .preview{display:block;max-width:100%;max-height:160px;border-radius:10px;margin-top:8px}
   .progress{font-size:13px;color:var(--muted);margin-top:8px}
+  .cf{margin-top:12px}
 
   /* 안내 띠 · 토스트 */
   .notice{background:#FFF7EE;color:#5A3A14;font-size:13px;line-height:1.5;padding:8px 14px;border-top:1px solid #F3D9BC}
@@ -128,15 +133,31 @@
     background:var(--asphalt);color:#fff;padding:10px 14px;border-radius:10px;font-size:14px;
     box-shadow:0 4px 12px rgba(0,0,0,.25);display:none;max-width:90%;
   }
+  /* ① 내 위치로 이동 (지도 위 둥근 버튼) */
+  .locate{
+    position:absolute;right:10px;bottom:84px;z-index:500;width:46px;height:46px;border-radius:50%;border:0;
+    background:var(--paper);color:var(--booth);box-shadow:0 2px 8px rgba(0,0,0,.22);display:grid;place-items:center;cursor:pointer;padding:0
+  }
+  .locate svg{width:24px;height:24px;display:block}
+  .locate.busy svg{animation:spin 1s linear infinite}
+  .locate[disabled]{opacity:.7;cursor:default}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){.locate.busy svg{animation:none}}
+  /* ④ 제보 종류 라디오 */
+  .kinds{display:grid;gap:6px;margin-top:2px}
+  .kind{display:flex;align-items:center;gap:10px;border:1.5px solid #C9D1D8;border-radius:12px;padding:10px 12px;font-size:14px;font-weight:600;cursor:pointer;margin:0}
+  .kind input{margin:0;width:18px;height:18px;accent-color:var(--hotspot)}
+  .kind:has(input:checked){border-color:var(--hotspot);background:#FFF1F1}
   .mapnote{
-    position:absolute;left:10px;right:10px;bottom:76px;z-index:500;display:none;
+    position:absolute;left:10px;right:66px;bottom:76px;z-index:500;display:none;
     background:rgba(31,42,51,.9);color:#fff;font-size:12px;padding:8px 12px;border-radius:8px;line-height:1.4;
   }
   @media (min-width:720px){
     header h1{font-size:22px}
-    .actions{left:auto;right:16px;width:360px}
-    .mapnote{left:auto;right:16px;width:360px}
-    .sheet{left:auto;right:16px;width:360px;border-radius:18px;bottom:16px}
+    .actions{left:auto;right:16px;width:380px}
+    .mapnote{left:auto;right:72px;width:380px}
+    .locate{right:16px;bottom:90px}
+    .sheet{left:auto;right:16px;width:380px;border-radius:18px;bottom:16px}
   }
 </style>
 </head>
@@ -151,18 +172,22 @@
   <div id="map" role="application" aria-label="노원구 꽁초함 지도"></div>
 
   <div class="chips" role="group" aria-label="표시할 항목">
-    <button class="chip" data-layer="bin" aria-pressed="true"><span class="dot" style="background:var(--filter)"></span>꽁초함</button>
-    <button class="chip" data-layer="booth" aria-pressed="true"><span class="dot" style="background:var(--booth)"></span>흡연부스·흡연구역</button>
-    <button class="chip" data-layer="hotspot" aria-pressed="true"><span class="dot" style="background:var(--hotspot)"></span>무단투기 핫스팟</button>
-    <button class="chip" data-layer="mine" aria-pressed="true" hidden><span class="dot" style="background:var(--mine)"></span>내 제보</button>
+    <button class="chip" data-layer="bin" aria-pressed="true"><span class="dot dot-bin"></span>꽁초함</button>
+    <button class="chip" data-layer="booth" aria-pressed="true"><span class="dot dot-booth"></span>흡연부스·흡연구역</button>
+    <button class="chip" data-layer="hotspot" aria-pressed="true"><span class="dot dot-hotspot"></span>무단투기 핫스팟</button>
+    <button class="chip" data-layer="mine" aria-pressed="true" hidden><span class="dot dot-mine"></span>내 제보</button>
   </div>
+
+  <button class="locate" id="btnMe" aria-label="내 위치로 이동" title="내 위치로 이동">
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
 
   <div class="toast" id="toast" role="status"></div>
   <div class="mapnote" id="mapnote" role="status"></div>
 
   <div class="actions">
     <button class="btn btn-primary" id="btnLocate">가장 가까운 꽁초함 찾기</button>
-    <button class="btn btn-secondary" id="btnReport" aria-label="제보하기">+ 제보</button>
+    <button class="btn btn-report" id="btnReport" aria-label="현장 사진 제보">📷 현장 제보</button>
   </div>
 
   <section class="sheet" id="sheet" aria-live="polite">
@@ -174,13 +199,13 @@
 
 <div class="notice">
   담배 필터는 플라스틱(셀룰로오스 아세테이트)입니다. 길에 버린 꽁초는 빗물받이를 거쳐 중랑천과 한강, 서해로 갑니다.
-  꽁초 무단투기 과태료는 5만 원입니다. 흡연시설 자료: 노원구청(2026.4 기준) · 내 위치는 기기 안에서만 계산되고 어디에도 전송되지 않습니다.
+  꽁초 무단투기 과태료는 5만 원입니다. 꽁초함 자료: 노원구청 자원순환과(2026.11 기준, 26곳) · 흡연시설 자료: 노원구청(2026.4 기준) · 내 위치는 기기 안에서만 계산되고 어디에도 전송되지 않습니다.
 </div>
 
 <!-- 데이터 (값을 바꾸면 ?v= 숫자를 올려서 캐시를 갱신) -->
-<script src="data/points.js?v=3"></script>
+<script src="data/points.js?v=4"></script>
 <script src="data/hotspots.js?v=1"></script>
-<!-- 앱 (지도 공급자 선택·제보·AI 호출). 설정값은 app.js 맨 위 CONFIG -->
-<script src="app.js?v=7"></script>
+<!-- 앱. 설정값은 app.js 맨 위 CONFIG -->
+<script src="app.js?v=9"></script>
 </body>
 </html>
