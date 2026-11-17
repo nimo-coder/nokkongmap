@@ -17,7 +17,7 @@ const CONFIG = {
   NAVER_KEY_PARAM: "ncpKeyId",
 
   // 제보 수신 서버(server/Code.gs 를 Apps Script 웹앱으로 배포한 URL). 비우면 브라우저에만 저장.
-  REPORT_ENDPOINT: "",
+  REPORT_ENDPOINT: "https://script.google.com/macros/s/AKfycbykEtaaQ5VPv7vtapxOQjZDUGFpDl0lGp25xdj5ZhHhpaFhatiusYoF21HXa8CSAquB/exec",
 
   SHOW_DEMO: false,                                   // 예시 핀 표시 여부
   START: { lat: 37.6255, lng: 127.0800, zoom: 15 },   // 공릉동
